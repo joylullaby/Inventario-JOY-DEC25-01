@@ -1451,7 +1451,89 @@
         // ============================================
 
         // Cargar datos al abrir la página
-        window.addEventListener('load', loadProducts);
+//         window.addEventListener('load', loadProducts);
+
+        // ============================================
+// CARGA AUTOMÁTICA DEL CSV INICIAL
+// ============================================
+
+// Función para cargar CSV automáticamente si no hay productos
+async function loadInitialCSV() {
+    // Solo cargar si no hay productos guardados
+    if (products.length === 0) {
+        try {
+            const response = await fetch('joylullaby_inventario_2025-12-01.csv');
+            if (!response.ok) throw new Error('No se pudo cargar el CSV');
+            
+            const csvText = await response.text();
+            const lines = csvText.split('\n').filter(line => line.trim());
+            
+            if (lines.length < 2) return;
+            
+            // Procesar filas (saltar header)
+            const importedProducts = [];
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i];
+                const parsed = parseCSVLine(line);
+                
+                if (parsed.length < 5) continue;
+                
+                const code = parsed[0] || '';
+                const name = parsed[1] || code;
+                const category = parsed[2] || 'Bodysuits';
+                const color = parsed[3] || '';
+                const stockStr = parsed[4] || '';
+                const notes = parsed[6] || '';
+                
+                if (!code || !color) continue;
+                
+                // Parsear stock por talla
+                const sizeStock = {};
+                if (stockStr) {
+                    const sizes = stockStr.split('|');
+                    sizes.forEach(size => {
+                        const [sizeKey, qty] = size.split(':');
+                        if (sizeKey && qty) {
+                            sizeStock[sizeKey.trim()] = parseInt(qty) || 0;
+                        }
+                    });
+                }
+                
+                if (Object.keys(sizeStock).length === 0) continue;
+                
+                const totalQuantity = Object.values(sizeStock).reduce((sum, q) => sum + q, 0);
+                
+                importedProducts.push({
+                    id: Date.now() + Math.random(),
+                    code: code,
+                    name: name,
+                    category: category,
+                    color: color,
+                    sizeStock: sizeStock,
+                    quantity: totalQuantity,
+                    notes: notes,
+                    image: null,
+                    created: new Date().toLocaleDateString('es-ES')
+                });
+            }
+            
+            if (importedProducts.length > 0) {
+                products = [...products, ...importedProducts];
+                saveProducts();
+                renderProducts();
+                showMessage(`Inventario inicial cargado: ${importedProducts.length} productos`, 'success');
+            }
+        } catch (error) {
+            console.log('No se pudo cargar el CSV inicial (es normal en la primera carga):', error);
+        }
+    }
+}
+
+// Modificar la función window.addEventListener para cargar CSV
+window.addEventListener('load', async () => {
+    loadProducts();
+    await loadInitialCSV();
+});
 
         // Cerrar modal con ESC
         document.addEventListener('keydown', (e) => {
